@@ -1,0 +1,158 @@
+---
+description: Projektarkitektur og filplacering konventioner
+globs: []
+alwaysApply: false
+---
+
+# Project Structure Guidelines
+
+## Mappestruktur
+
+Følg denne struktur for alle nye filer:
+
+```
+src/
+├── app/                    # Next.js App Router pages og layouts
+│   ├── api/               # API routes og Server Actions
+│   │   └── venues/        # Venue-relaterede endpoints
+│   ├── page.tsx           # Root page
+│   └── layout.tsx         # Root layout
+├── components/            # Reusable UI komponenter
+│   ├── MapCanvas.tsx     # Google Maps komponent
+│   ├── VenueCard.tsx     # Venue display komponent
+│   ├── SunBadge.tsx      # Sol-status badge
+│   └── FilterBar.tsx     # Filter UI
+├── lib/                   # Utility funktioner og klienter
+│   ├── dmi/              # DMI API integration
+│   ├── google/           # Google Maps/Places helpers
+│   └── supabase/         # Supabase client og queries
+├── types/                 # TypeScript type definitions
+│   ├── venue.ts          # Venue-relaterede typer
+│   └── weather.ts        # Vejr-data typer
+└── public/                # Static assets (ikke i src/)
+```
+
+## Filplacering Guidelines
+
+### App Router Files (`src/app`)
+
+- **Pages**: `src/app/[route]/page.tsx` - hver route har sin egen `page.tsx`
+- **Layouts**: `src/app/[route]/layout.tsx` - delte layouts
+- **API Routes**: `src/app/api/[endpoint]/route.ts` - Server Actions og API handlers
+- **Server Actions**: Kan være i `src/app/api` eller separate filer i `src/lib`
+
+### Components (`src/components`)
+
+- Én komponent pr. fil
+- Filnavn matcher komponentnavn (PascalCase)
+- Gruppér relaterede komponenter i undermapper hvis nødvendigt
+
+```tsx
+// ✅ src/components/VenueCard.tsx
+export default function VenueCard() { }
+
+// ✅ src/components/map/MapCanvas.tsx (hvis flere map-relaterede komponenter)
+export default function MapCanvas() { }
+```
+
+### Library Functions (`src/lib`)
+
+- Gruppér efter domæne/service (dmi, google, supabase)
+- Én fil pr. hovedfunktionalitet eller relaterede funktioner
+- Eksporter både funktioner og typer fra samme fil hvis de hører sammen
+
+```tsx
+// ✅ src/lib/dmi/getForecast.ts
+export async function getForecast(lat: number, lng: number) { }
+
+// ✅ src/lib/dmi/getCurrentSky.ts
+export async function getCurrentSky(lat: number, lng: number) { }
+
+// ✅ src/lib/dmi/index.ts (barrel export)
+export { getForecast } from './getForecast';
+export { getCurrentSky } from './getCurrentSky';
+```
+
+### Types (`src/types`)
+
+- Én fil pr. domæne eller relateret type gruppe
+- Eksporter typer, interfaces og Zod schemas sammen
+
+```tsx
+// ✅ src/types/venue.ts
+export interface Venue { }
+export type VenueStatus = 'open' | 'closed';
+export const venueSchema = z.object({ });
+```
+
+## Naming Conventions
+
+### Filer og Mapper
+
+- **Komponenter**: PascalCase (`VenueCard.tsx`)
+- **Utility funktioner**: camelCase (`getVenues.ts`)
+- **Types**: camelCase (`venue.ts`, `weather.ts`)
+- **Konstanter**: UPPER_SNAKE_CASE (`API_BASE_URL.ts`)
+
+### Variabler og Funktioner
+
+- **Komponenter**: PascalCase (`VenueCard`)
+- **Funktioner**: camelCase (`getNearbyVenues`)
+- **Konstanter**: UPPER_SNAKE_CASE (`DEFAULT_LOCATION`)
+- **Types/Interfaces**: PascalCase (`Venue`, `VenueStatus`)
+
+### API Routes
+
+- Brug RESTful naming: `/api/venues`, `/api/venues/[id]`
+- Server Actions: verb-baserede navne (`getVenues`, `createVenue`)
+
+## Import Organization
+
+- Gruppér imports: externe libraries først, derefter interne
+- Brug path aliases (`@/*`) for alle interne imports
+- Sorter imports alfabetisk indenfor hver gruppe
+
+```tsx
+// ✅ Korrekt import struktur
+import { useState } from 'react';
+import Image from 'next/image';
+
+import { Venue } from '@/types/venue';
+import { getVenues } from '@/lib/google/places';
+import VenueCard from '@/components/VenueCard';
+```
+
+## Barrel Exports
+
+- Overvej `index.ts` filer i mapper for cleaner imports
+- Eksporter kun det der skal være tilgængeligt eksternt
+
+```tsx
+// ✅ src/lib/dmi/index.ts
+export { getForecast } from './getForecast';
+export { getCurrentSky } from './getCurrentSky';
+export type { Forecast, SkyCondition } from './types';
+
+// Brug: import { getForecast } from '@/lib/dmi';
+```
+
+## Code Organization i Filer
+
+1. Imports (externe først, derefter interne)
+2. Type definitions (hvis kun brugt i denne fil)
+3. Constants
+4. Helper functions
+5. Main export (component eller function)
+6. Type exports (hvis relevante)
+
+## Nye Features
+
+Når du tilføjer ny funktionalitet:
+
+1. **UI Komponenter** → `src/components/[ComponentName].tsx`
+2. **API Integration** → `src/lib/[service]/[functionName].ts`
+3. **Types** → `src/types/[domain].ts`
+4. **Pages** → `src/app/[route]/page.tsx`
+5. **API Routes** → `src/app/api/[endpoint]/route.ts`
+
+Følg README.md's beskrivelse af mapper og konventioner for konsistens.

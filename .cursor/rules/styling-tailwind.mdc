@@ -1,0 +1,227 @@
+---
+description: Tailwind CSS styling guidelines
+globs:
+  - "**/*.tsx"
+  - "**/*.css"
+alwaysApply: false
+---
+
+# Tailwind CSS Styling Guidelines
+
+## Utility-First Approach
+
+- Brug Tailwind utility classes direkte i JSX
+- Undgå custom CSS klasser når Tailwind utilities kan bruges
+- Gruppér relaterede utilities logisk (layout, spacing, colors, etc.)
+
+```tsx
+// ✅ Brug Tailwind utilities
+<div className="flex min-h-screen items-center justify-center bg-zinc-50">
+  <main className="flex w-full max-w-3xl flex-col gap-6 p-8">
+    {/* content */}
+  </main>
+</div>
+
+// ❌ Undgå custom CSS når ikke nødvendigt
+<div className="custom-container">
+  {/* content */}
+</div>
+```
+
+## Responsive Design
+
+- Brug Tailwind's responsive prefixes (`sm:`, `md:`, `lg:`, `xl:`, `2xl:`)
+- Mobile-first approach - base styles er for mobile, tilføj breakpoints for større skærme
+- Test på forskellige skærmstørrelser
+
+```tsx
+// ✅ Mobile-first responsive
+<div className="flex flex-col gap-4 p-4 sm:flex-row sm:gap-6 sm:p-8 lg:gap-8">
+  <div className="w-full sm:w-1/2 lg:w-1/3">
+    {/* content */}
+  </div>
+</div>
+```
+
+## Dark Mode Support
+
+- Projektet understøtter dark mode via `dark:` prefix
+- Brug `dark:` variant for alle farver der skal ændres i dark mode
+- Test både light og dark mode
+
+```tsx
+// ✅ Dark mode support
+<div className="bg-white text-black dark:bg-black dark:text-zinc-50">
+  <h1 className="text-zinc-950 dark:text-zinc-50">
+    Title
+  </h1>
+  <p className="text-zinc-600 dark:text-zinc-400">
+    Description
+  </p>
+</div>
+```
+
+## Color Palette
+
+- Brug Tailwind's default color palette (zinc, slate, etc.)
+- Konsistent brug af farver gennem projektet
+- Brug semantiske farver (fx `bg-primary`, `text-secondary`) hvis defineret i `globals.css`
+
+```tsx
+// ✅ Konsistent color usage
+<button className="bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-black dark:hover:bg-zinc-200">
+  Click me
+</button>
+```
+
+## Spacing og Layout
+
+- Brug Tailwind's spacing scale (4, 8, 12, 16, etc.) for konsistens
+- Brug `gap-*` for spacing i flex/grid layouts
+- Brug `p-*` (padding) og `m-*` (margin) konsekvent
+
+```tsx
+// ✅ Konsistent spacing
+<div className="flex flex-col gap-6 p-8">
+  <section className="mb-4">
+    {/* content */}
+  </section>
+</div>
+```
+
+## Typography
+
+- Brug Tailwind's typography utilities (`text-*`, `font-*`)
+- Projektet bruger Geist fonts defineret i `layout.tsx`
+- Brug semantiske heading sizes (`text-3xl` for h1, `text-xl` for h2, etc.)
+
+```tsx
+// ✅ Typography
+<h1 className="text-3xl font-semibold leading-10 tracking-tight">
+  Main Title
+</h1>
+<p className="text-lg leading-8">
+  Body text
+</p>
+```
+
+## Component Styling Patterns
+
+### Card Components
+
+```tsx
+// ✅ Card pattern
+<div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+  {/* card content */}
+</div>
+```
+
+### Button Components
+
+```tsx
+// ✅ Button patterns
+<button className="rounded-full bg-zinc-950 px-5 py-3 text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-black dark:hover:bg-zinc-200">
+  Primary Button
+</button>
+
+<button className="rounded-full border border-zinc-200 px-5 py-3 transition-colors hover:border-transparent hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800">
+  Secondary Button
+</button>
+```
+
+### Form Elements
+
+- Brug `@tailwindcss/forms` plugin hvis tilføjet til projektet
+- Konsistent styling på inputs, selects, checkboxes
+
+```tsx
+// ✅ Form input
+<input
+  type="text"
+  className="w-full rounded-md border border-zinc-300 px-4 py-2 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+/>
+```
+
+## Image Optimization
+
+- Brug Next.js `Image` komponent med Tailwind classes
+- Definer width/height eksplicit for bedre performance
+- Brug `dark:invert` for SVG logos der skal flippes i dark mode
+
+```tsx
+import Image from 'next/image';
+
+<Image
+  src="/logo.svg"
+  alt="Logo"
+  width={100}
+  height={20}
+  className="dark:invert"
+  priority // Hvis above-the-fold
+/>
+```
+
+## Custom CSS
+
+- Placer custom CSS i `src/app/globals.css`
+- Brug CSS custom properties (CSS variables) for dynamiske værdier
+- Undgå custom CSS når Tailwind utilities kan bruges
+
+```css
+/* ✅ Custom CSS kun når nødvendigt */
+@layer utilities {
+  .custom-gradient {
+    background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+  }
+}
+```
+
+## Animation og Transitions
+
+- Brug Tailwind's transition utilities (`transition-*`)
+- Brug `hover:`, `focus:`, `active:` states konsekvent
+- Overvej Framer Motion for komplekse animationer (som nævnt i README)
+
+```tsx
+// ✅ Transitions
+<button className="transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
+  Hover me
+</button>
+
+<div className="transition-transform hover:scale-105">
+  Hover scale
+</div>
+```
+
+## Accessibility
+
+- Brug semantiske HTML elementer
+- Sørg for kontrast ratios (Tailwind's farver er designet til dette)
+- Brug `focus:` states for keyboard navigation
+
+```tsx
+// ✅ Accessible button
+<button
+  className="focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
+  aria-label="Close dialog"
+>
+  Close
+</button>
+```
+
+## Performance
+
+- Undgå for mange nested divs - brug semantiske elementer
+- Brug `@apply` sparsomt i custom CSS (kan øge bundle size)
+- Prefer utility classes over custom CSS for bedre tree-shaking
+
+## Konsistens Checklist
+
+Når du styler nye komponenter:
+
+- [ ] Responsive design med mobile-first approach
+- [ ] Dark mode support med `dark:` variants
+- [ ] Konsistent spacing (4px grid)
+- [ ] Semantiske farver fra projektets palette
+- [ ] Hover/focus states for interaktive elementer
+- [ ] Accessibility considerations (contrast, focus states)

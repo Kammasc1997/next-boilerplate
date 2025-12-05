@@ -1,0 +1,127 @@
+---
+description: Handlingsplan for Google Maps, DMI og Supabase integration
+globs:
+  - "src/lib/**"
+  - "src/app/api/**"
+alwaysApply: false
+---
+
+# API Integration Plan
+
+## Implementeringsrækkefølge
+1. **Miljø & konstanter** – opret `src/lib/config.ts` med typed getters for alle env vars (`GOOGLE_MAPS_PLACES_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, `DMI_API_KEY`, Supabase nøgler). Test tidligt at nøglerne eksisterer.
+2. **Domænetyper** – definér Zod schemas/TS typer i `src/types/venues.ts` for Places responses, DMI observationer/forecast og `VenueWithWeather`. Cursor kan derefter autogenerere kode med stærk typehjælp.
+3. **Google Places modul** – implementér `getNearbyPlaces`, `getPlaceDetails`, photo helper og rate-limiter i `src/lib/google/places.ts`. Trim datafelter og cache efter `lat,lng,radius`.
+4. **DMI modul** – byg station lookup + observation (`cloud_cover`) og forecast fetchers i `src/lib/dmi`. Beregn solhøjde via `suncalc` og returnér booleans `sunNow`, `sunLater`. Cache per koord i 10 minutter.
+5. **Supabase modul** – `src/lib/supabase` håndterer metadata (`venues` tabel). Tilføj fallback hvis RLS/supabase fejler (log, men fortsæt uden metadata). 
+6. **Server action / API route** – i `src/app/api/venues/route.ts` samles data. Begræns parallelle DMI kald (f.eks. p-limit). Returnér `ApiResult<VenueWithWeather[]>` med detaljeret `error.code`.
+7. **Client integration** – først når API'et er stabilt, forbrug data i Map + liste komponenter. Håndter loading, tomme svar og fejlbeskeder.
+
+> Fokus: byg backend/dataflow færdig før UI. Kør serveraction direkte via `curl`/tests for hurtigere iteration.
+
+---
+
+## Google Maps & Places
+
+- Brug server-side key til fetch (`GOOGLE_MAPS_PLACES_API_KEY`) og browser key til JS SDK (`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`).
+- Understøt typerne `cafe|restaurant`. Giv mulighed for at udvide til `bar`.
+- Rate limit: in-memory cache + `AbortController` (timeout ~6s). Returnér cached svar hvis Google svarer med `OVER_QUERY_LIMIT`.
+- For åbningstider kombiner `current_opening_hours` med `utc_offset_minutes` for lokal tid.
+
+```tsx
+// src/lib/google/places.ts
+const GOOGLE_PLACES_API_BASE = 'https://maps.googleapis.com/maps/api/place';
+
+export async function getNearbyPlaces(lat: number, lng: number, radius = 1200) {
+  const apiKey = config.googlePlacesServerKey;
+  const url = `${GOOGLE_PLACES_API_BASE}/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=cafe|restaurant&key=${apiKey}`;
+
+  const res = await fetch(url, { next: { revalidate: 60 } });
+  if (!res.ok) throw new Error(`Places error ${res.status}`);
+  const payload = await res.json();
+  return placeSearchSchema.parse(payload);
+}
+```
+
+---
+
+## DMI integration
+
+- Observation endpoint: `/metObs/v2/observation` med `parameterId=cloud_cover`.
+- Forecast endpoint: `/metFc/dmiWeather` (eller relevant) filtreret på samme koordinater. Cache 10 min.
+- Station lookup kan ligge i `src/lib/dmi/stations.ts` (cache stationliste + find nærmeste).
+- Beregn solstatus:
+  ```ts
+  const pos = SunCalc.getPosition(date, lat, lng);
+  const sunVisible = pos.altitude > 0 && cloudCover < 5; // justér threshold
+  ```
+- Returnér både rå data og afledte værdier (`sunNow`, `sunIn2h`, etc.).
+
+---
+
+## Supabase integration
+
+- `src/lib/supabase/client.ts` eksporterer både browser-klient (`NEXT_PUBLIC_SUPABASE_*`) og server-klient (service role).
+- Metadata tabel `venues` bruger `external_place_id` som nøgle. Gem flags som `has_outdoor_seating`, `manual_opening_hours`, `notes`.
+- I API'et: fetch alle relevante metadata i ét `IN` query og merge med Places resultater.
+- Hvis Supabase fejler, log og returnér `metaStatus: 'unavailable'` så klienten kan vise en badge.
+
+---
+
+## API komposition (Server Actions)
+
+```tsx
+// src/app/api/venues/route.ts
+export async function POST(req: Request) {
+  const { lat, lng } = await req.json();
+
+  const places = await getNearbyPlaces(lat, lng);
+  const enriched = await enrichVenuesWithMetadata(places.results);
+
+  const limiter = pLimit(4);
+  const venues = await Promise.all(
+    enriched.map((venue) =>
+      limiter(async () => {
+        const [currentSky, forecast] = await Promise.all([
+          getCurrentSky(venue.geometry.location.lat, venue.geometry.location.lng),
+          getForecast(venue.geometry.location.lat, venue.geometry.location.lng),
+        ]);
+        return composeVenuePayload(venue, currentSky, forecast);
+      })
+    )
+  );
+
+  return NextResponse.json<ApiResult<VenueWithWeather[]>>({ success: true, data: venues });
+}
+```
+
+- `composeVenuePayload` bør normalisere tidszoner, åbningstider og beregne boolean flags (`isOpenNow`, `sunNow`, `sunLater`).
+- Tilføj logging og metrics (fx `console.info` + metadata) så Cursor kan debugge.
+
+---
+
+## Error handling & fallback
+
+- Brug fælles helper `safeApiCall` til at wrappe third-party-kald og returnere `code` (`GOOGLE_ERROR`, `DMI_TIMEOUT`, `SUPABASE_UNAVAILABLE`).
+- Hvis Google kalder `ZERO_RESULTS`, returnér tom liste men `success: true`.
+- Hvis DMI fejler, returnér `weather: { status: 'unknown' }` så UI kan vise fallback.
+- Log altid `placeId`/`stationId` når der sker fejl for lettere debugging.
+
+---
+
+## Rate limiting & caching
+
+- Google Places: cache per `lat,lng,radius` i 60 sekunder. Overvej at bruge `@upstash/redis` i produktion.
+- DMI: observationer og forecasts kan cache 5–10 minutter afhængigt af endpoint. Gem i memory map, men for Vercel skal du være opmærksom på cold starts.
+- Supabase: ingen rate limit, men begræns queries – fetch alt i én forespørgsel.
+- Klienten bør memoize filterresultater, så repeated API hits minimeres.
+
+---
+
+## Teststrategi
+
+1. Unit tests for Google/DMI helpers (mock fetch og verify parsing).
+2. Integration test for serveraction (brug `msw` eller `vitest` med mocked fetch).
+3. Smoke test i dev: `curl -X POST /api/venues -d '{"lat":55.68,"lng":12.57}'`.
+
+Når denne plan følges, får vi en robust backend-pipeline, som Cursor kan bygge UI ovenpå uden at skulle gætte på integrationsdetaljer.

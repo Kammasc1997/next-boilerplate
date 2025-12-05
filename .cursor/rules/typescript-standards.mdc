@@ -1,0 +1,180 @@
+---
+description: TypeScript type safety og coding standards
+alwaysApply: true
+---
+
+# TypeScript Standards
+
+## Strict Mode Compliance
+
+- Projektet bruger `strict: true` i `tsconfig.json`
+- Altid definér eksplicitte typer for funktionsparametre og returværdier
+- Undgå `any` - brug `unknown` hvis typen er ukendt og valider den
+
+```tsx
+// ✅ Eksplicit typing
+function getVenueById(id: string): Promise<Venue | null> {
+  // implementation
+}
+
+// ❌ Undgå any
+function processData(data: any) { }
+```
+
+## Type Definitions
+
+- Placer type definitions i `src/types` mappen
+- Brug `interface` for objektstrukturer der kan udvides
+- Brug `type` for unions, intersections og aliases
+
+```tsx
+// src/types/venue.ts
+export interface Venue {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  hasOutdoorSeating: boolean;
+}
+
+export type VenueStatus = 'open' | 'closed' | 'unknown';
+```
+
+## Zod Schemas for Runtime Validation
+
+- Brug Zod for runtime validation af API responses og form data
+- Generer TypeScript typer fra Zod schemas med `z.infer`
+- Eksporter både schema og type
+
+```tsx
+import { z } from 'zod';
+
+export const venueSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  hasOutdoorSeating: z.boolean().default(false),
+});
+
+export type Venue = z.infer<typeof venueSchema>;
+
+// Brug til validation
+const validatedVenue = venueSchema.parse(apiResponse);
+```
+
+## Path Aliases
+
+- Brug `@/*` alias defineret i `tsconfig.json` for alle imports
+- Konsistent brug af relative paths kun for samme mappe
+
+```tsx
+// ✅ Brug path alias
+import { Venue } from '@/types/venue';
+import { getVenues } from '@/lib/google/places';
+
+// ❌ Undgå relative paths udenfor samme mappe
+import { Venue } from '../../../types/venue';
+```
+
+## Type Guards
+
+- Brug type guards til at narrow types i runtime
+- Især vigtigt ved API responses og user input
+
+```tsx
+function isVenue(obj: unknown): obj is Venue {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'id' in obj &&
+    'name' in obj &&
+    'latitude' in obj &&
+    'longitude' in obj
+  );
+}
+
+// Eller brug Zod schema
+function isVenue(obj: unknown): obj is Venue {
+  return venueSchema.safeParse(obj).success;
+}
+```
+
+## Error Handling
+
+- Definer custom error typer hvor det giver mening
+- Brug discriminated unions for error states
+
+```tsx
+type Result<T, E = Error> =
+  | { success: true; data: T }
+  | { success: false; error: E };
+
+async function fetchVenue(id: string): Promise<Result<Venue>> {
+  try {
+    const venue = await api.getVenue(id);
+    return { success: true, data: venue };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error : new Error('Unknown error') };
+  }
+}
+```
+
+## React Component Props
+
+- Definer props interfaces med eksplicit navngivning
+- Brug `Readonly` for props interfaces hvor muligt
+- Undgå inline object types i component signatures
+
+```tsx
+// ✅ Eksplicit props interface
+interface VenueCardProps {
+  venue: Venue;
+  onSelect?: (venue: Venue) => void;
+}
+
+export default function VenueCard({ venue, onSelect }: Readonly<VenueCardProps>) {
+  // component implementation
+}
+```
+
+## Async Functions
+
+- Altid type async funktioner korrekt med `Promise<T>`
+- Håndter Promise rejections eksplicit
+
+```tsx
+async function getNearbyVenues(lat: number, lng: number): Promise<Venue[]> {
+  // implementation
+  return venues;
+}
+```
+
+## Null Safety
+
+- Brug optional chaining (`?.`) og nullish coalescing (`??`)
+- Eksplicit håndtering af `null` og `undefined`
+- Overvej non-null assertion (`!`) kun når du er sikker på værdien
+
+```tsx
+// ✅ Null-safe access
+const venueName = venue?.name ?? 'Unknown';
+const coordinates = venue?.location?.coordinates;
+
+// ⚠️ Non-null assertion - brug kun når sikker
+const requiredValue = venue!.id;
+```
+
+## Generic Types
+
+- Brug generics for reusable funktioner og komponenter
+- Navngiv generics beskrivende (fx `T`, `TData`, `TError`)
+
+```tsx
+function createApiClient<TResponse>(endpoint: string) {
+  return async (): Promise<TResponse> => {
+    const response = await fetch(endpoint);
+    return response.json();
+  };
+}
+```

@@ -1,0 +1,129 @@
+---
+description: Next.js 14 App Router konventioner og best practices
+alwaysApply: true
+---
+
+# Next.js 14 App Router Guidelines
+
+## Server Components som Default
+
+- Brug **Server Components** som standard - de er default i App Router
+- Server Components kan direkte kalde databases, APIs og server-side funktioner
+- Ingen `'use client'` directive nødvendig for Server Components
+
+```tsx
+// ✅ Server Component (default)
+export default async function VenueList() {
+  const venues = await getNearbyVenues();
+  return <div>{/* render venues */}</div>;
+}
+```
+
+## Client Components
+
+- Tilføj `'use client'` kun når nødvendigt:
+  - Interaktivitet (onClick, onChange, useState, useEffect)
+  - Browser APIs (window, localStorage, geolocation)
+  - Third-party libraries der kræver client-side (Google Maps SDK)
+
+```tsx
+// ✅ Client Component - nødvendig for interaktivitet
+'use client';
+
+import { useState } from 'react';
+
+export default function FilterBar() {
+  const [filter, setFilter] = useState('all');
+  return <div>{/* filter UI */}</div>;
+}
+```
+
+## File Conventions
+
+- `page.tsx` - Route segment der er tilgængelig via URL
+- `layout.tsx` - Delte layouts der wrappes om child routes
+- `route.ts` - API endpoints (GET, POST, etc.)
+- `loading.tsx` - Loading UI for Suspense boundaries
+- `error.tsx` - Error boundaries
+- `not-found.tsx` - 404 pages
+
+## Server Actions
+
+- Placer Server Actions i `src/app/api` eller direkte i Server Components
+- Brug `'use server'` directive for Server Actions
+- Server Actions kan kaldes fra både Server og Client Components
+
+```tsx
+// src/app/api/venues/route.ts eller server action fil
+'use server';
+
+export async function getNearbyVenues(lat: number, lng: number) {
+  // Server-side logic
+  const places = await fetchGooglePlaces(lat, lng);
+  return places;
+}
+```
+
+## Metadata og SEO
+
+- Brug `Metadata` type fra `next` i `layout.tsx` eller `page.tsx`
+- Eksporter `metadata` objekt eller `generateMetadata` funktion
+
+```tsx
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Solspot - Find sol i byen',
+  description: 'Find caféer og restauranter med sol lige nu',
+};
+```
+
+## Data Fetching
+
+- Fetch data direkte i Server Components - ingen useEffect nødvendig
+- Brug `fetch` med caching strategier (`cache: 'force-cache'` eller `cache: 'no-store'`)
+- For dynamisk data, brug `cache: 'no-store'` eller `revalidate`
+
+```tsx
+// ✅ Server Component data fetching
+export default async function VenuePage({ params }: { params: { id: string } }) {
+  const venue = await fetch(`/api/venues/${params.id}`, {
+    cache: 'no-store', // eller 'force-cache' for statisk data
+  });
+  return <div>{/* render venue */}</div>;
+}
+```
+
+## Path Aliases
+
+- Brug `@/*` alias defineret i `tsconfig.json` for imports
+- Eksempel: `import { getVenues } from '@/lib/google/places'`
+
+## Error Handling
+
+- Brug `error.tsx` for error boundaries
+- Brug try/catch i Server Actions og Server Components
+- Returnér meningsfulde fejlbeskeder til klienten
+
+## Performance Best Practices
+
+- Brug `next/image` for billeder med automatisk optimering
+- Brug `next/link` for client-side navigation
+- Implementér loading states med Suspense boundaries
+- Overvej `dynamic` imports for store komponenter
+
+```tsx
+import dynamic from 'next/dynamic';
+
+// Lazy load store komponenter
+const MapCanvas = dynamic(() => import('@/components/MapCanvas'), {
+  loading: () => <div>Loading map...</div>,
+  ssr: false, // Hvis komponenten kræver browser APIs
+});
+```
+
+## Environment Variables
+
+- Brug `NEXT_PUBLIC_` prefix for variabler der skal være tilgængelige i browseren
+- Server-side variabler (uden prefix) er kun tilgængelige på serveren
+- Læs fra `.env.local` i development, Vercel environment variables i production
